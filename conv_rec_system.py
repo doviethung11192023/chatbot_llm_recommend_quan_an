@@ -1,8 +1,8 @@
-import openai.error
-
 from information_retriever.item.item_loader import ItemLoader
 
+from intelligence.alpaca_lora_wrapper import AlpacaLoraWrapper
 from intelligence.gpt_wrapper import GPTWrapper
+from intelligence.ollama_wrapper import OllamaWrapper
 from warning_observer import WarningObserver
 from rec_action.answer import Answer
 from rec_action.recommend import Recommend
@@ -58,6 +58,7 @@ class ConvRecSystem(WarningObserver):
     user_interface: UserInterface
     dialogue_manager: DialogueManager
     init_msg: str
+    _llm_provider: str
 
     def __init__(self, config: dict, openai_api_key_or_gradio_url: str,
                  user_defined_constraint_mergers: list = None,
@@ -72,11 +73,20 @@ class ConvRecSystem(WarningObserver):
         domain = domain_specific_config_loader.load_domain()
 
         model = config["MODEL"]
+        self._llm_provider = config.get("MODEL_PROVIDER", "openai").lower()
 
         if not isinstance(openai_api_key_or_gradio_url, str):
-            raise TypeError("The variable type of OPENAI_API_KEY or GRADIO_URL is wrong.")
+            raise TypeError("The variable type of model provider credential is wrong.")
 
-        llm_wrapper = GPTWrapper(openai_api_key_or_gradio_url, model_name=model, observers=[self])
+        if self._llm_provider == "openai":
+            llm_wrapper = GPTWrapper(openai_api_key_or_gradio_url, model_name=model, observers=[self])
+        elif self._llm_provider == "alpaca":
+            llm_wrapper = AlpacaLoraWrapper(openai_api_key_or_gradio_url)
+        elif self._llm_provider == "ollama":
+            llm_wrapper = OllamaWrapper(openai_api_key_or_gradio_url, model_name=model, observers=[self])
+        else:
+            raise ValueError(
+                f"Unsupported MODEL_PROVIDER={self._llm_provider}. Use one of: openai, alpaca, ollama")
 
         hard_coded_responses = domain_specific_config_loader.load_hard_coded_responses()
 
@@ -204,13 +214,9 @@ class ConvRecSystem(WarningObserver):
         :param retry_info: dictionary that contains information about retry
         """
         if not self.is_gpt_retry_notified:
-            if isinstance(retry_info.get('outcome').exception(), openai.error.ServiceUnavailableError) or \
-                    isinstance(retry_info.get('outcome').exception(), openai.error.APIConnectionError):
-                self.user_interface.display_warning(
-                    "There were some issues with the OpenAI server. It might take longer than usual.")
-            else:
-                self.user_interface.display_warning(
-                    "OpenAI API are currently busy. It might take longer than usual.")
+            provider_name = self._llm_provider.upper()
+            self.user_interface.display_warning(
+                f"{provider_name} service is busy or temporarily unavailable. It might take longer than usual.")
 
         self.is_gpt_retry_notified = True
         

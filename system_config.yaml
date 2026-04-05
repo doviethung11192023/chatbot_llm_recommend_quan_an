@@ -31,7 +31,9 @@ ANSWER_MULT_QS_PROMPT: "seperate_questions_prompt.jinja"
 ANSWER_MULT_QS_FORMAT_RESP_PROMPT: "format_mult_qs_prompt.jinja"
 
 PATH_TO_DOMAIN_CONFIGS: "domain_specific/configs/restaurant_configs"
+MODEL_PROVIDER: "openai"
 MODEL: "gpt-3.5-turbo"
+OLLAMA_BASE_URL: "http://localhost:11434"
 SEARCH_ENGINE: "vector database"
 ENABLE_MULTITHREADING: True
 UNACCEPTABLE_SIMILARITY_SCORE_RANGE: 0.5

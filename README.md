@@ -541,3 +541,108 @@ PATH_TO_EMBEDDING_MATRIX: "data/reviews_embedding_matrix.pt"
 PATH_TO_DATABASE: "data/database.faiss"
 ```
 If you do not want to follow our structure, then modify the paths above to where you stored the corresponding files.
+
+## Running on Kaggle with Ollama
+
+The project now supports provider-based LLM selection through the following keys in `system_config.yaml`:
+
+- `MODEL_PROVIDER`: `openai`, `alpaca`, or `ollama`
+- `MODEL`: model name for the selected provider (for Ollama, e.g. `llama3.2:3b`)
+- `OLLAMA_BASE_URL`: base URL of Ollama server (default `http://localhost:11434`)
+
+### Mode A: Kaggle -> Remote Ollama Endpoint (recommended)
+
+Use this mode when you run Ollama on your own machine or VPS and Kaggle only sends requests to that endpoint.
+
+1. Start Ollama on your remote host and pull model:
+
+```bash
+ollama serve
+ollama pull llama3.2:3b
+```
+
+2. Set `system_config.yaml`:
+
+```yaml
+MODEL_PROVIDER: "ollama"
+MODEL: "llama3.2:3b"
+OLLAMA_BASE_URL: "http://<YOUR_HOST>:11434"
+```
+
+3. In Kaggle notebook:
+
+```bash
+pip install -r requirements.txt
+python smoke_test_inference.py --provider ollama --model llama3.2:3b
+python clothing_main.py
+```
+
+### Mode B: Local Ollama Runtime inside Kaggle
+
+Use this mode only for experiments. It is less stable because Kaggle sessions can restart and model pulls are large.
+
+1. Install and start Ollama in Kaggle notebook.
+2. Pull model in current session.
+3. Keep `OLLAMA_BASE_URL=http://localhost:11434`.
+
+Example setup sequence:
+
+```bash
+pip install -r requirements.txt
+curl -fsSL https://ollama.com/install.sh | sh
+nohup ollama serve >/tmp/ollama.log 2>&1 &
+ollama pull llama3.2:3b
+python smoke_test_inference.py --provider ollama --model llama3.2:3b
+python clothing_main.py
+```
+
+## Quick Smoke Test (1-turn inference)
+
+Before running the full chatbot, run a single-turn check:
+
+```bash
+python smoke_test_inference.py --provider ollama --model llama3.2:3b
+```
+
+Custom prompt example:
+
+```bash
+python smoke_test_inference.py --provider ollama --model llama3.2:3b --prompt "Suggest one cheap sushi place in Edmonton"
+```
+
+The script verifies that:
+
+- Provider can initialize successfully.
+- One inference call returns non-empty text.
+- Token usage counter updates.
+
+File: `smoke_test_inference.py`
+
+## Packaging Checklist for Kaggle
+
+### Option 1: GitHub Flow
+
+1. Commit and push your branch to GitHub.
+2. In Kaggle, create a new notebook and attach the GitHub repo source.
+3. Install dependencies in notebook.
+4. Set provider config to Ollama.
+5. Run smoke test script.
+6. Run `clothing_main.py` or `restaurant_main.py` for interactive test.
+
+### Option 2: ZIP Flow
+
+1. Create a zip package from project root.
+2. Exclude heavy/generated folders (`.git`, caches, local virtual envs, model artifacts).
+3. Upload zip as a Kaggle Dataset.
+4. Unzip inside notebook working directory.
+5. Install dependencies.
+6. Set provider config and environment variables.
+7. Run smoke test first, then full chatbot.
+
+### Pre-deploy Sanity Checks
+
+1. `MODEL_PROVIDER` is set correctly in `system_config.yaml`.
+2. `MODEL` matches an existing Ollama model tag.
+3. `OLLAMA_BASE_URL` is reachable from runtime.
+4. `python smoke_test_inference.py --provider ollama --model <model>` passes.
+5. One full turn in chatbot returns response without exception.
