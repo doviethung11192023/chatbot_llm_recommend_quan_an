@@ -46,7 +46,7 @@ This architecture allows LLM-ConvRec to scale across domains with minimal reconf
   - [1. Clone the GitHub Repository](#1-clone-the-github-repository)
   - [2. Navigate to the Project Directory](#2-navigate-to-the-project-directory)
   - [3. Install the Required Packages](#3-install-the-required-packages)
-  - [4. Obtaining an OpenAI API Key and Configuring the .env file](#4-obtaining-an-openai-api-key-and-configuring-the-env-file)
+  - [4. Loading Qwen3-4B-Instruct from Hugging Face and Configuring the .env file](#4-loading-qwen3-4b-instruct-from-hugging-face-and-configuring-the-env-file)
   - [5. Run the System](#5-run-the-system)
 - [Overall Conversation Flow](#overall-conversation-flow)
   - [1. Intent Classification](#1-intent-classification)
@@ -91,35 +91,37 @@ The project has a number of dependencies that need to be installed. These are li
 
 **pip install -r requirements.txt**
 
-### 4 Obtaining an OpenAI API Key and Configuring the .env file
+### 4 Loading Qwen3-4B-Instruct from Hugging Face and Configuring the .env file
 
-Before you can run the system, you need an API key from OpenAI. This key enables the model to interact with the OpenAI's servers to process and generate conversational responses.
+The default model for this project is now `Qwen/Qwen3-4B-Instruct`. The model is downloaded directly from Hugging Face the first time you run the project, then cached locally for later runs.
 
-Here are the steps to obtain an API key:
-
-1. Visit OpenAI's website and create an account or log in if you already have an account.
-
-2. Navigate to the 'API Keys' section in your account settings.
-
-3. Click on the 'Create a new API key' button.
-
-4. Name your key and click on 'Create secret key' to generate your new API key.
-
-**Note that the system cannot be used without entering your credit card information to your OpenAI account since the system interactions exceed the free API limitations. A typical conversation costs < $0.02.**
-
-After you have the API key, you need to configure your `.env` file:
+If you are using a public Hugging Face model, you do not need any token. If you are using a private model or want to avoid rate limits, you can add a Hugging Face token to `.env`:
 
 1. Create a new file in your project root directory and name it `.env`.
 
-2. Inside the `.env` file, create a new line and write `OPENAI_API_KEY=`, and then paste your API key after the equals sign. For example:
+2. Add one of the following lines if needed:
 
-OPENAI_API_KEY='sk1234567890abcdef`.
+```bash
+HF_TOKEN=your_huggingface_token
+```
 
-4. Save the `.env` file.
+or
 
-Please ensure you do not upload your `.env` file to public repositories to keep your OpenAI API key secure.
+```bash
+HUGGINGFACE_TOKEN=your_huggingface_token
+```
+
+3. Save the `.env` file.
+
+The system will use the token automatically if it is present.
 
 ### 5. Run the System
+
+Before running the full chatbot, you can quickly verify the model with:
+
+```
+python smoke_test_inference.py --provider hf --model Qwen/Qwen3-4B-Instruct
+```
 
 If you want to run the restaurant demo execute following command in the terminal:
 

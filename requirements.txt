@@ -5,7 +5,8 @@ pandas==2.0.3
 tensorflow==2.15.0
 keras==2.15.0
 python-dotenv==1.0.1
-transformers==4.31.0
+transformers==4.51.3
+accelerate==1.1.1
 pyyaml==6.0.1
 pytest==7.4.4
 geopy==2.3.0

@@ -2,6 +2,7 @@ from information_retriever.item.item_loader import ItemLoader
 
 from intelligence.alpaca_lora_wrapper import AlpacaLoraWrapper
 from intelligence.gpt_wrapper import GPTWrapper
+from intelligence.huggingface_wrapper import HuggingFaceWrapper
 from intelligence.ollama_wrapper import OllamaWrapper
 from warning_observer import WarningObserver
 from rec_action.answer import Answer
@@ -60,7 +61,7 @@ class ConvRecSystem(WarningObserver):
     init_msg: str
     _llm_provider: str
 
-    def __init__(self, config: dict, openai_api_key_or_gradio_url: str,
+    def __init__(self, config: dict, openai_api_key_or_gradio_url: str | None,
                  user_defined_constraint_mergers: list = None,
                  user_constraint_status_objects: list = None,
                  user_defined_filter: list[Filter] = None,
@@ -73,20 +74,22 @@ class ConvRecSystem(WarningObserver):
         domain = domain_specific_config_loader.load_domain()
 
         model = config["MODEL"]
-        self._llm_provider = config.get("MODEL_PROVIDER", "openai").lower()
+        self._llm_provider = config.get("MODEL_PROVIDER", "hf").lower()
 
-        if not isinstance(openai_api_key_or_gradio_url, str):
+        if self._llm_provider not in {"hf", "huggingface"} and not isinstance(openai_api_key_or_gradio_url, str):
             raise TypeError("The variable type of model provider credential is wrong.")
 
         if self._llm_provider == "openai":
             llm_wrapper = GPTWrapper(openai_api_key_or_gradio_url, model_name=model, observers=[self])
+        elif self._llm_provider in {"hf", "huggingface"}:
+            llm_wrapper = HuggingFaceWrapper(model_name=model, observers=[self], hf_token=openai_api_key_or_gradio_url)
         elif self._llm_provider == "alpaca":
             llm_wrapper = AlpacaLoraWrapper(openai_api_key_or_gradio_url)
         elif self._llm_provider == "ollama":
             llm_wrapper = OllamaWrapper(openai_api_key_or_gradio_url, model_name=model, observers=[self])
         else:
             raise ValueError(
-                f"Unsupported MODEL_PROVIDER={self._llm_provider}. Use one of: openai, alpaca, ollama")
+                f"Unsupported MODEL_PROVIDER={self._llm_provider}. Use one of: openai, hf, huggingface, alpaca, ollama")
 
         hard_coded_responses = domain_specific_config_loader.load_hard_coded_responses()
 

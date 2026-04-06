@@ -35,6 +35,8 @@ if provider == 'openai':
     llm_provider_credential = os.environ.get('OPENAI_API_KEY')
     if not llm_provider_credential:
         raise ValueError("MODEL_PROVIDER=openai requires OPENAI_API_KEY")
+elif provider in {'hf', 'huggingface'}:
+    llm_provider_credential = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN')
 elif provider == 'alpaca':
     llm_provider_credential = os.environ.get('GRADIO_URL')
     if not llm_provider_credential:

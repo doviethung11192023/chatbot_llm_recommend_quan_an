@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 from intelligence.alpaca_lora_wrapper import AlpacaLoraWrapper
 from intelligence.gpt_wrapper import GPTWrapper
+from intelligence.huggingface_wrapper import HuggingFaceWrapper
 from intelligence.ollama_wrapper import OllamaWrapper
 
 
@@ -22,6 +23,10 @@ def _build_wrapper(provider: str, model: str, config: dict):
         if not openai_key:
             raise ValueError('OPENAI_API_KEY is required when provider=openai')
         return GPTWrapper(openai_key, model_name=model)
+
+    if provider in {'hf', 'huggingface'}:
+        hf_token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_TOKEN')
+        return HuggingFaceWrapper(model_name=model, hf_token=hf_token)
 
     if provider == 'alpaca':
         gradio_url = os.environ.get('GRADIO_URL')
@@ -46,7 +51,7 @@ def main() -> None:
     parser.add_argument('--config', default='system_config.yaml',
                         help='Path to system config yaml.')
     parser.add_argument('--provider', default=None,
-                        help='Override provider (openai/alpaca/ollama).')
+                        help='Override provider (openai/hf/huggingface/alpaca/ollama).')
     parser.add_argument('--model', default=None,
                         help='Override model name.')
     parser.add_argument('--prompt', default='Hello! Please introduce yourself in one short sentence.',
@@ -57,7 +62,7 @@ def main() -> None:
     load_dotenv()
     config = _load_config(args.config)
 
-    provider = args.provider or config.get('MODEL_PROVIDER', 'openai')
+    provider = args.provider or config.get('MODEL_PROVIDER', 'hf')
     model = args.model or config.get('MODEL', 'gpt-3.5-turbo')
 
     print(f'[smoke-test] provider={provider}, model={model}')
