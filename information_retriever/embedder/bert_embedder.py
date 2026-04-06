@@ -1,11 +1,8 @@
-from transformers import AutoTokenizer, TFAutoModel
-import tensorflow as tf
-from tensorflow import keras
-from keras import layers
 import torch
-import transformers
 import numpy as np
-from transformers.models.distilbert.tokenization_distilbert_fast import DistilBertTokenizerFast
+from transformers import AutoModel, AutoTokenizer
+
+import transformers
 
 transformers.logging.set_verbosity_error()
 
@@ -16,10 +13,8 @@ transformers.logging.set_verbosity_error()
 
 class BERT_model:
     _bert_name: str
-    _tokenizer: DistilBertTokenizerFast
-    _bert_model: keras.Model
-    _first_input: str
-    _second_input: str
+    _tokenizer: AutoTokenizer
+    _bert_model: torch.nn.Module
     _device: torch.device
 
     def __init__(self, bert_name: str, tokenizer_name: str, from_pt: bool = True):
@@ -29,8 +24,10 @@ class BERT_model:
         """
         self._bert_name = bert_name
         self._tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        self._bert_model, self._first_input, self._second_input = self._create_model(bert_name, from_pt)
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._bert_model = self._create_model(bert_name, from_pt)
+        self._bert_model.to(self._device)
+        self._bert_model.eval()
 
     def embed(self, texts: list[str], strategy=None, bs=48, verbose=0) -> np.ndarray:
         """
@@ -42,31 +39,32 @@ class BERT_model:
         :param verbose: Defaults to 0.
         :return: embeddings of texts
         """
-        tokenized_review = self._tokenizer.batch_encode_plus(
-            texts,
-            max_length=512,
-            add_special_tokens=True,
-            truncation=True,
-            padding="max_length",
-            return_token_type_ids=True,
-        )
+        embeddings = []
 
-        data = {
-            self._first_input: tokenized_review['input_ids'],
-            self._second_input: tokenized_review['attention_mask'],
-        }
+        for start_index in range(0, len(texts), bs):
+            batch_texts = texts[start_index:start_index + bs]
+            batch = self._tokenizer(
+                batch_texts,
+                max_length=512,
+                add_special_tokens=True,
+                truncation=True,
+                padding=True,
+                return_tensors='pt'
+            )
 
-        if strategy is not None:
-            with strategy.scope():
-                dataset = tf.data.Dataset.from_tensor_slices(data).batch(bs, drop_remainder=False).prefetch(
-                    buffer_size=tf.data.experimental.AUTOTUNE)
-                outputs = self._bert_model.predict(dataset, verbose=verbose)
-                return outputs['last_hidden_state'][:, 0, :].reshape(-1, 768)
-        else:
-            dataset = tf.data.Dataset.from_tensor_slices(data).prefetch(
-                buffer_size=tf.data.experimental.AUTOTUNE).batch(bs, drop_remainder=False)
-            outputs = self._bert_model.predict(dataset, verbose=verbose)
-            return outputs['last_hidden_state'][:, 0, :].reshape(-1, 768)
+            batch = {key: value.to(self._device) for key, value in batch.items()}
+
+            with torch.inference_mode():
+                outputs = self._bert_model(**batch)
+
+            last_hidden_state = outputs.last_hidden_state
+            attention_mask = batch['attention_mask'].unsqueeze(-1).type_as(last_hidden_state)
+            summed = (last_hidden_state * attention_mask).sum(dim=1)
+            counts = attention_mask.sum(dim=1).clamp(min=1e-9)
+            pooled = summed / counts
+            embeddings.append(pooled.detach().cpu())
+
+        return torch.cat(embeddings, dim=0).numpy()
 
     def get_tensor_embedding(self, query: str) -> torch.Tensor:
         """
@@ -81,21 +79,22 @@ class BERT_model:
 
         return query_embedding
 
-    def _create_model(self, bert_name: str, from_pt: bool = True) -> tuple[keras.Model, str, str]:
-        # BERT encoder
-        encoder = TFAutoModel.from_pretrained(bert_name, from_pt=from_pt)
+    def _create_model(self, bert_name: str, from_pt: bool = True) -> torch.nn.Module:
+        """
+        Load a Hugging Face encoder model with PyTorch.
 
-        # Model
-        input_ids = layers.Input(shape=(None,), dtype=tf.int32)
-        attention_mask = layers.Input(shape=(None,), dtype=tf.int32)
-
-        embedding = encoder(
-            input_ids=input_ids, attention_mask=attention_mask
-        )
-
-        model = keras.Model(
-            inputs=[input_ids, attention_mask],
-            outputs=embedding)
-
-        model.compile()
-        return model, input_ids.name, attention_mask.name
+        The from_pt flag is kept for compatibility with the old API.
+        For Hugging Face checkpoints it should remain True.
+        """
+        if from_pt:
+            model = AutoModel.from_pretrained(
+                bert_name,
+                trust_remote_code=True
+            )
+        else:
+            model = AutoModel.from_pretrained(
+                bert_name,
+                from_tf=True,
+                trust_remote_code=True
+            )
+        return model
